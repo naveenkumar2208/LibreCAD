@@ -65,9 +65,7 @@ bool LC_ActionDimLinearBase::doTriggerModifications(LC_DocumentModificationBatch
         batch += dimension.release();
         return true;
     }
-    m_allowExternalTermination = false;
     const bool created = LC_RectangleDimensions::create(*m_document, *dimension, m_graphicView, batch);
-    m_allowExternalTermination = true;
     if (created) {
         dimension.release();
     }
