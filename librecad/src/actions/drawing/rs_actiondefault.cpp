@@ -34,6 +34,7 @@
 #include "lc_linemath.h"
 #include "lc_propertysheetwidget.h"
 #include "lc_quickinfowidget.h"
+#include "lc_rectangle_dimensions.h"
 #include "qc_applicationwindow.h"
 #include "rs_arc.h"
 #include "rs_circle.h"
@@ -57,6 +58,8 @@ struct RS_ActionDefault::ActionData {
     RS_Vector v2;
     RS_Vector pressSnapPoint;
     RS_Entity* refMovingEntity = nullptr;
+    QList<RS_Entity*> rectangleDrag;
+    bool draggingRectangle = false;
     unsigned long long hoveredEntityId = 0;
     bool hoverRefPoints = false;
 };
@@ -286,6 +289,13 @@ void RS_ActionDefault::onMouseMoveEvent([[maybe_unused]] const int status, const
             m_actionData->v2 = mouse;
 
             if (toGuiDX(m_actionData->v1.distanceTo(m_actionData->v2)) > 10){
+                RS_Entity* entity = catchEntity(m_actionData->v1);
+                if (entity && entity->getParent() == m_document && LC_RectangleDimensions::isRectangle(*entity)) {
+                    m_actionData->draggingRectangle = true;
+                    m_actionData->rectangleDrag = LC_RectangleDimensions::dragEntities(*m_document, *entity);
+                    setStatus(Moving);
+                    break;
+                }
                 // look for reference points to drag:
                 double dist = NAN;
                 bool singleEntitySelection = m_document->isSingleEntitySelected();
@@ -296,14 +306,16 @@ void RS_ActionDefault::onMouseMoveEvent([[maybe_unused]] const int status, const
                 }
                 RS_Vector ref = refInfo.ref;
                 // dist will be initialized if ref.valid = true.
-                if (ref.valid && toGuiDX(dist) < 8){
+                if (ref.valid && toGuiDX(dist) < 8 && refInfo.entity &&
+                    !LC_RectangleDimensions::isRectangle(*refInfo.entity) &&
+                    !LC_RectangleDimensions::isDriving(*refInfo.entity)) {
                     m_actionData->refMovingEntity = refInfo.entity;
                     m_actionData->v1 = ref;
                     moveRelativeZero(m_actionData->v1);
                     setStatus(MovingRef);
                 } else {
                     // test for an entity to drag:
-                    RS_Entity *en =  catchEntity(m_actionData->v1);
+                    RS_Entity* en = entity;
                     if (en != nullptr && en->isSelected()){
                         if (m_actionData->pressSnapPoint.valid) {
                             m_actionData->v1 = m_actionData->pressSnapPoint;
@@ -536,6 +548,15 @@ void RS_ActionDefault::onMouseMoveEvent([[maybe_unused]] const int status, const
             break;
         }
         case Moving: {
+            if (m_actionData->draggingRectangle) {
+                for (auto* entity : std::as_const(m_actionData->rectangleDrag)) {
+                    RS_Entity* clone = getClone(entity);
+                    clone->move(mouse - m_actionData->v1);
+                    m_preview->addEntity(clone);
+                }
+                drawPreview();
+                break;
+            }
             mouse = e->snapPoint;
             m_actionData->v2 = getSnapAngleAwarePoint(e, m_actionData->v1, mouse, true);
             updateCoordinateWidgetByRelZero(m_actionData->v2);
@@ -553,6 +574,11 @@ void RS_ActionDefault::onMouseMoveEvent([[maybe_unused]] const int status, const
             QList<RS_Entity*> selection;
             if (m_document->collectSelected(selection)) {
                 for (auto ent : std::as_const(selection)) {
+                    if (LC_RectangleDimensions::isDriving(*ent) ||
+                        (LC_RectangleDimensions::isRectangle(*ent) &&
+                         LC_RectangleDimensions::dragEntities(*m_document, *ent).size() != 1)) {
+                        continue;
+                    }
                     RS_Entity* clone = getClone(ent);
                     clone->move(offset);
                     m_preview->addEntity(clone);
@@ -814,12 +840,36 @@ void RS_ActionDefault::onMouseMovingRefCompleted(const LC_MouseEvent* e) {
 }
 
 void RS_ActionDefault::onMouseMovingCompleted(const LC_MouseEvent* e) {
+    if (m_actionData->draggingRectangle) {
+        const RS_Vector offset = e->graphPoint - m_actionData->v1;
+        const auto entities = m_actionData->rectangleDrag;
+        goToNeutralStatus();
+        deleteSnapper();
+        if (!entities.isEmpty() && offset.magnitude() > RS_TOLERANCE) {
+            m_document->undoableModify(m_viewport, [entities, offset](LC_DocumentModificationBatch& batch) {
+                batch.dontSetActiveLayerAndPen();
+                for (auto* entity : entities) {
+                    auto* clone = entity->clone();
+                    clone->move(offset);
+                    clone->clearSelectionFlag();
+                    batch.replace(entity, clone);
+                }
+                return true;
+            });
+        }
+        return;
+    }
     m_actionData->v2 = e->snapPoint;
     m_actionData->v2 = getSnapAngleAwarePoint(e, m_actionData->v1, m_actionData->v2);
     deletePreview();
 
     QList<RS_Entity*> selectedEntities;
     m_document->getSelection()->collectSelectedEntities(selectedEntities);
+    selectedEntities.removeIf([this](RS_Entity* entity) {
+        return LC_RectangleDimensions::isDriving(*entity) ||
+               (LC_RectangleDimensions::isRectangle(*entity) &&
+                LC_RectangleDimensions::dragEntities(*m_document, *entity).size() != 1);
+    });
     bool keepOriginal = e->isControl;
 
     m_document->undoableModify(m_viewport, [this,keepOriginal, selectedEntities](LC_DocumentModificationBatch& ctx)-> bool {
@@ -873,7 +923,7 @@ void RS_ActionDefault::onMouseLeftButtonPress(const int status, const LC_MouseEv
             break;
         }
         case Moving: {
-            if (m_completeMovingByMousePressed) {
+            if (m_completeMovingByMousePressed && !m_actionData->draggingRectangle) {
                 onMouseMovingCompleted(e);
             }
             break;
@@ -956,7 +1006,7 @@ void RS_ActionDefault::onMouseLeftButtonRelease(const int status, const LC_Mouse
             break;
         }
         case Moving: {
-            if (!m_completeMovingByMousePressed) {
+            if (!m_completeMovingByMousePressed || m_actionData->draggingRectangle) {
                 onMouseMovingCompleted(e);
             }
             break;
@@ -980,6 +1030,8 @@ void RS_ActionDefault::onMouseRightButtonRelease([[maybe_unused]]int status, [[m
 }
 
 void RS_ActionDefault::goToNeutralStatus(){
+    m_actionData->draggingRectangle = false;
+    m_actionData->rectangleDrag.clear();
     deletePreview();
     clearHighLighting();
     deleteInfoCursor();
@@ -1014,7 +1066,15 @@ QStringList RS_ActionDefault::getAvailableCommands(){
 void RS_ActionDefault::updateActionPrompt(){
     switch (getStatus()) {
         case Moving:{
-            updatePromptTRCancel(tr("Set new position"), MOD_SHIFT_AND_CTRL_ANGLE(tr("Create a copy")));
+            if (m_actionData->draggingRectangle) {
+                if (m_actionData->rectangleDrag.isEmpty()) {
+                    updatePrompt(tr("A driving dimension or locked layer prevents dragging this rectangle"));
+                } else {
+                    updatePromptTRCancel(tr("Release to place the rectangle"));
+                }
+            } else {
+                updatePromptTRCancel(tr("Set new position"), MOD_SHIFT_AND_CTRL_ANGLE(tr("Create a copy")));
+            }
             break;
         }
         case MovingRef: {

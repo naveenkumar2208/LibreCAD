@@ -72,6 +72,7 @@ protected:
     bool isInVisualSnapStatus(int status) override;
     void onCoordinateEvent(int status, bool isZero, const RS_Vector& pos) override;
     void updateActionPrompt() override;
+    bool doTriggerModifications(LC_DocumentModificationBatch& batch) override;
     RS_Entity* doTriggerCreateEntity() override;
 };
 #endif

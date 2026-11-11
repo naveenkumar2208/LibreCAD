@@ -1485,6 +1485,7 @@ HEADERS += actions/dock_widgets/block/rs_actionblocksadd.h \
     actions/drawing/draw/spline/lc_action_draw_spline.h \
     actions/drawing/draw/dimensions/lc_actiondimarc.h \
     actions/drawing/draw/dimensions/lc_actiondimlinearbase.h \
+    actions/drawing/draw/dimensions/lc_rectangle_dimensions.h \
     actions/drawing/draw/dimensions/rs_actiondimaligned.h \
     actions/drawing/draw/dimensions/rs_actiondimangular.h \
     actions/drawing/draw/dimensions/rs_actiondimdiametric.h \
@@ -1651,6 +1652,7 @@ SOURCES += actions/dock_widgets/block/rs_actionblocksadd.cpp \
     actions/drawing/draw/spline/lc_action_draw_spline.cpp \
     actions/drawing/draw/dimensions/lc_actiondimarc.cpp \
     actions/drawing/draw/dimensions/lc_actiondimlinearbase.cpp \
+    actions/drawing/draw/dimensions/lc_rectangle_dimensions.cpp \
     actions/drawing/draw/dimensions/rs_actiondimaligned.cpp \
     actions/drawing/draw/dimensions/rs_actiondimangular.cpp \
     actions/drawing/draw/dimensions/rs_actiondimdiametric.cpp \

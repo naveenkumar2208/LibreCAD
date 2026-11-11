@@ -518,6 +518,7 @@ set (SHARED_SOURCES
      librecad/src/actions/drawing/draw/dimensions/lc_actiondimarc.cpp
      librecad/src/actions/drawing/draw/dimensions/lc_actiondimarc.h
      librecad/src/actions/drawing/draw/dimensions/lc_actiondimlinearbase.cpp
+     librecad/src/actions/drawing/draw/dimensions/lc_rectangle_dimensions.cpp
      librecad/src/actions/drawing/draw/dimensions/lc_actiondimordinate.cpp
      librecad/src/actions/drawing/draw/dimensions/lc_actiondimordinate.h
      librecad/src/actions/drawing/draw/dimensions/lc_actiondimordinaterebase.cpp

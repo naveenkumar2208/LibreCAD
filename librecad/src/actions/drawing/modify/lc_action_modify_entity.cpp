@@ -29,6 +29,7 @@
 #include "lc_dlg_dimension.h"
 #include "lc_entitypropertieseditor.h"
 #include "lc_quickinfowidget.h"
+#include "lc_rectangle_dimensions.h"
 #include "qc_applicationwindow.h"
 #include "qg_dlg_hatch.h"
 #include "qg_dlg_mtext.h"
@@ -92,6 +93,14 @@ bool LC_ActionModifyEntity::doTriggerModifications(LC_DocumentModificationBatch&
     const int status = getStatus();
     if (status == ShowDialog) {
         if (m_entity != nullptr) {
+            if (LC_RectangleDimensions::isDriving(*m_entity)) {
+                m_allowExternalTermination = false;
+                const bool edited = LC_RectangleDimensions::edit(*m_document, *m_entity, m_graphicView, ctx);
+                m_allowExternalTermination = true;
+                m_entity = nullptr;
+                setStatus(EditComplete);
+                return edited;
+            }
             const bool selected = m_entity->isSelected();
             select(m_entity);
             setStatus(InEditing);
@@ -188,6 +197,13 @@ bool LC_ActionModifyEntity::doTriggerModifications(LC_DocumentModificationBatch&
 
 void LC_ActionModifyEntity::doTriggerCompletion(const bool success) {
     LC_UndoableDocumentModificationAction::doTriggerCompletion(success);
+    if (getStatus() == EditComplete && m_entity == nullptr) {
+        if (m_invokedForSingleEntity) {
+            finish();
+        } else {
+            setStatus(ShowDialog);
+        }
+    }
 }
 
 void LC_ActionModifyEntity::onMouseMoveEvent([[maybe_unused]] const int status, const LC_MouseEvent* e) {

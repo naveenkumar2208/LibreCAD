@@ -22,11 +22,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "lc_actiondimlinearbase.h"
 
+#include "lc_rectangle_dimensions.h"
 #include "rs_constructionline.h"
 #include "rs_dimaligned.h"
 #include "rs_dimension.h"
 #include "rs_dimlinear.h"
+#include "rs_document.h"
 #include "rs_entity.h"
+#include "rs_graphicview.h"
 #include "rs_polyline.h"
 #include "rs_preview.h"
 
@@ -48,6 +51,27 @@ RS_Entity* LC_ActionDimLinearBase::doTriggerCreateEntity() {
     auto *dim = createDim(m_document);
     dim->update();
     return dim;
+}
+
+bool LC_ActionDimLinearBase::doTriggerModifications(LC_DocumentModificationBatch& batch) {
+    if (rtti() == RS2::ActionDimBaseline || rtti() == RS2::ActionDimContinue) {
+        return LC_SingleEntityCreationAction::doTriggerModifications(batch);
+    }
+    std::unique_ptr<RS_Entity> dimension(doTriggerCreateEntity());
+    if (!dimension) {
+        return false;
+    }
+    if (!static_cast<RS_Dimension&>(*dimension).getLabel(false).isEmpty()) {
+        batch += dimension.release();
+        return true;
+    }
+    m_allowExternalTermination = false;
+    const bool created = LC_RectangleDimensions::create(*m_document, *dimension, m_graphicView, batch);
+    m_allowExternalTermination = true;
+    if (created) {
+        dimension.release();
+    }
+    return created;
 }
 
 void LC_ActionDimLinearBase::doInitWithContextEntity(RS_Entity* contextEntity, const RS_Vector& clickPos) {
